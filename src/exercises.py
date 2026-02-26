@@ -38,113 +38,104 @@ def create_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(
         """
         CREATE TABLE students (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL,
-          email TEXT NOT NULL UNIQUE
+                                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                  name TEXT NOT NULL,
+                                  email TEXT NOT NULL UNIQUE
         );
 
         CREATE TABLE courses (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          code TEXT NOT NULL UNIQUE,
-          title TEXT NOT NULL
+                                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                 code TEXT NOT NULL UNIQUE,
+                                 title TEXT NOT NULL
         );
 
         CREATE TABLE enrollments (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          student_id INTEGER NOT NULL,
-          course_id INTEGER NOT NULL,
-          enrolled_at TEXT NOT NULL DEFAULT (datetime('now')),
-          FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
-          FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-          UNIQUE(student_id, course_id)
+                                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                     student_id INTEGER NOT NULL,
+                                     course_id INTEGER NOT NULL,
+                                     enrolled_at TEXT NOT NULL DEFAULT (datetime('now')),
+                                     FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+                                     FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+                                     UNIQUE(student_id, course_id)
         );
         """
     )
 
 
-# ---------------------------
-# TODO 1: INSERT (parameterized)
-# ---------------------------
 def add_student(conn: sqlite3.Connection, name: str, email: str) -> int:
     """
     Insert a student and return the new student id.
-
-    TODO:
-      - Use a parameterized INSERT
-      - Return cursor.lastrowid
     """
     # cursor = conn.execute("INSERT ...", (...))
     # return cursor.lastrowid
-    raise NotImplementedError
+    cursor = conn.execute(
+        "INSERT INTO students (name, email) VALUES (?, ?);",
+        (name, email),
+    )
+    return cursor.lastrowid
 
 
-# ---------------------------
-# TODO 2: SELECT (one row)
-# ---------------------------
 def find_student_by_email(conn: sqlite3.Connection, email: str) -> Optional[sqlite3.Row]:
     """
     Return the student row for the given email, or None.
-
-    TODO:
-      - Use a parameterized SELECT
-      - Use fetchone()
     """
-    raise NotImplementedError
+    row = conn.execute(
+        "SELECT id, name, email FROM students WHERE email = ?;",
+        (email,),
+    ).fetchone()
+    return row
 
 
-# ---------------------------
-# TODO 3: UPDATE
-# ---------------------------
 def rename_student(conn: sqlite3.Connection, student_id: int, new_name: str) -> int:
     """
     Update a student's name. Return number of rows updated (cursor.rowcount).
 
-    TODO:
-      - Use parameterized UPDATE
-      - Return cursor.rowcount
     """
-    raise NotImplementedError
+    cursor = conn.execute(
+        "UPDATE students SET name = ? WHERE id = ?;",
+        (new_name, student_id),
+    )
+    return cursor.rowcount
 
-
-# ---------------------------
-# TODO 4: DELETE
-# ---------------------------
 def delete_student(conn: sqlite3.Connection, student_id: int) -> int:
     """
     Delete a student by id. Return number of rows deleted.
 
-    TODO:
-      - Use parameterized DELETE
     """
-    raise NotImplementedError
+    cursor = conn.execute(
+        "DELETE FROM students WHERE id = ?;",
+        (student_id,),
+    )
+    return cursor.rowcount
 
-
-# ---------------------------
-# TODO 5: JOIN query
-# ---------------------------
 def list_enrollments(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """
     Return rows showing: student_name, course_code, course_title
 
-    TODO:
-      - Write a SELECT with JOIN across enrollments, students, courses
-      - ORDER BY student_name, course_code
     """
-    raise NotImplementedError
+    rows = conn.execute(
+        """
+        SELECT
+            s.name AS student_name,
+            c.code AS course_code,
+            c.title AS course_title
+        FROM enrollments e
+                 JOIN students s ON s.id = e.student_id
+                 JOIN courses  c ON c.id = e.course_id
+        ORDER BY student_name, course_code;
+        """
+    ).fetchall()
+    return rows
 
-
-# ---------------------------
-# TODO 6: transaction behavior
-# ---------------------------
 def enroll_student(conn: sqlite3.Connection, student_id: int, course_id: int) -> None:
     """
     Enroll a student in a course.
 
-    TODO:
-      - Use parameterized INSERT into enrollments
-      - Do NOT commit here; caller controls commit/rollback.
     """
-    raise NotImplementedError
+    conn.execute(
+        "INSERT INTO enrollments (student_id, course_id) VALUES (?, ?);",
+        (student_id, course_id),
+    )
 
 
 def seed_courses(conn: sqlite3.Connection) -> None:
@@ -180,17 +171,16 @@ def main() -> None:
         seed_courses(conn)
         conn.commit()
 
-        # TODO 1-2: add 2 students, look one up
         # Expected: you should see ids printed and a dict-like row for the lookup.
-        s1 = add_student(conn, "Ava", "ava@example.com")
-        s2 = add_student(conn, "Noah", "noah@example.com")
+        s1 = add_student(conn, "Etty", "etty@example.com")
+        s2 = add_student(conn, "Rena", "rena@example.com")
         conn.commit()
 
-        print(f"Inserted students: Ava={s1}, Noah={s2}")
-        row = find_student_by_email(conn, "ava@example.com")
-        print("Lookup ava@example.com ->", dict(row) if row else None)
+        print(f"Inserted students: Etty={s1}, Rena={s2}")
+        row = find_student_by_email(conn, "etty@example.com")
+        print("Lookup etty@example.com ->", dict(row) if row else None)
 
-        # TODO 6: enrollments in a transaction
+
         # We'll intentionally enroll the same pair twice to trigger UNIQUE constraint.
         # The expected behavior:
         #   - the second insert raises IntegrityError
@@ -208,7 +198,7 @@ def main() -> None:
             print("Rolling back transaction...")
             conn.execute("ROLLBACK;")
 
-        # TODO 5: list enrollments (should be empty due to rollback)
+
         rows = list_enrollments(conn)
         print_rows("Enrollments (should be empty after rollback)", rows)
 
@@ -220,8 +210,8 @@ def main() -> None:
         rows = list_enrollments(conn)
         print_rows("Enrollments after valid commit", rows)
 
-        # TODO 3: rename a student
-        updated = rename_student(conn, s2, "Noah Kim")
+
+        updated = rename_student(conn, s2, "Etty Werczberger")
         conn.commit()
         print(f"rename_student rowcount={updated}")
 
@@ -229,7 +219,6 @@ def main() -> None:
         students = conn.execute("SELECT id, name, email FROM students ORDER BY id;").fetchall()
         print_rows("Students", students)
 
-        # TODO 4: delete a student
         deleted = delete_student(conn, s1)
         conn.commit()
         print(f"delete_student rowcount={deleted}")
