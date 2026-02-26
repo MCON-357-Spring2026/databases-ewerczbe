@@ -42,9 +42,6 @@ def reset_db() -> None:
         DB_PATH.unlink()
 
 
-# ---------------------------
-# TODO 1: Create schema
-# ---------------------------
 def create_schema(conn: sqlite3.Connection) -> None:
     """
     Create these tables:
@@ -66,33 +63,66 @@ def create_schema(conn: sqlite3.Connection) -> None:
       - score (required, >= 0)
       - UNIQUE(student_id, assignment_id) to prevent duplicates
     """
-    raise NotImplementedError
+    conn.execute("""
+                 CREATE TABLE students (
+                                           id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                           name TEXT NOT NULL,
+                                           email TEXT NOT NULL UNIQUE
+                 )
+                 """)
+    conn.execute("""
+                 CREATE TABLE assignments (
+                                              id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                              title TEXT NOT NULL,
+                                              max_points INTEGER NOT NULL CHECK (max_points > 0)
+                 )
+                 """)
+    conn.execute("""
+                 CREATE TABLE grades (
+                                         id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                         student_id INTEGER NOT NULL,
+                                         assignment_id INTEGER NOT NULL,
+                                         score INTEGER NOT NULL CHECK (score >= 0),
+                                         FOREIGN KEY(student_id) REFERENCES students(id),
+                                         FOREIGN KEY(assignment_id) REFERENCES assignments(id),
+                                         UNIQUE(student_id, assignment_id)
+                 )
+                 """)
 
 
-# ---------------------------
-# TODO 2: Insert helpers
-# ---------------------------
 def add_student(conn: sqlite3.Connection, name: str, email: str) -> int:
     """Insert into students and return new id."""
-    raise NotImplementedError
+    cur = conn.execute(
+        "INSERT INTO students (name, email) VALUES (?, ?)",
+        (name, email)
+    )
+    return cur.lastrowid
 
 
 def add_assignment(conn: sqlite3.Connection, title: str, max_points: int) -> int:
     """Insert into assignments and return new id."""
-    raise NotImplementedError
+    cur = conn.execute(
+        "INSERT INTO assignments (title, max_points) VALUES (?, ?)",
+        (title, max_points)
+    )
+    return cur.lastrowid
 
 
 def record_grade(conn: sqlite3.Connection, student_id: int, assignment_id: int, score: int) -> int:
     """Insert into grades and return new id."""
-    raise NotImplementedError
+    cur = conn.execute(
+        "INSERT INTO grades (student_id, assignment_id, score) VALUES (?, ?, ?)",
+        (student_id, assignment_id, score)
+    )
+    return cur.lastrowid
 
 
-# ---------------------------
-# TODO 3: Queries
-# ---------------------------
 def list_students(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """Return all students ordered by name."""
-    raise NotImplementedError
+    cur = conn.execute(
+        "SELECT * FROM students ORDER BY name"
+    )
+    return cur.fetchall()
 
 
 def student_grade_report(conn: sqlite3.Connection, student_id: int) -> list[sqlite3.Row]:
@@ -103,7 +133,17 @@ def student_grade_report(conn: sqlite3.Connection, student_id: int) -> list[sqli
     Hint:
       percent = ROUND(1.0 * score / max_points * 100, 1)
     """
-    raise NotImplementedError
+    cur = conn.execute("""
+                       SELECT
+                           assignments.title AS assignment_title,
+                           grades.score,
+                           assignments.max_points,
+                           ROUND(1.0 * grades.score / assignments.max_points * 100, 1) AS percent
+                       FROM grades
+                                JOIN assignments ON grades.assignment_id = assignments.id
+                       WHERE grades.student_id = ?
+                       """, (student_id,))
+    return cur.fetchall()
 
 
 def leaderboard(conn: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -113,7 +153,17 @@ def leaderboard(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 
     avg_percent should average the per-assignment percent for each student.
     """
-    raise NotImplementedError
+    cur = conn.execute("""
+                       SELECT
+                           students.name AS student_name,
+                           ROUND(AVG(1.0 * grades.score / assignments.max_points * 100), 1) AS avg_percent
+                       FROM grades
+                                JOIN students ON grades.student_id = students.id
+                                JOIN assignments ON grades.assignment_id = assignments.id
+                       GROUP BY students.id
+                       ORDER BY avg_percent DESC
+                       """)
+    return cur.fetchall()
 
 
 def print_rows(title: str, rows: Iterable[sqlite3.Row]) -> None:
@@ -139,45 +189,37 @@ def main() -> None:
         create_schema(conn)
         conn.commit()
 
-        # ---------------------------
-        # DEMO DATA (customize as you like)
-        # ---------------------------
-        # TODO: After implementing the insert helpers, uncomment and run this block.
-        """
-        s_ava = add_student(conn, "Ava", "ava@example.com")
-        s_noah = add_student(conn, "Noah", "noah@example.com")
-        s_maya = add_student(conn, "Maya", "maya@example.com")
+
+        s_rivka = add_student(conn, "Rivka", "rivka@example.com")
+        s_esther = add_student(conn, "Esther", "esther@example.com")
+        s_leah = add_student(conn, "Leah", "leah@example.com")
 
         a_q1 = add_assignment(conn, "Quiz 1", 10)
         a_hw1 = add_assignment(conn, "Homework 1", 100)
         a_mid = add_assignment(conn, "Midterm", 200)
 
-        record_grade(conn, s_ava, a_q1, 9)
-        record_grade(conn, s_ava, a_hw1, 95)
+        record_grade(conn, s_rivka, a_q1, 9)
+        record_grade(conn, s_rivka, a_hw1, 95)
 
-        record_grade(conn, s_noah, a_q1, 7)
-        record_grade(conn, s_noah, a_hw1, 88)
+        record_grade(conn, s_esther, a_q1, 7)
+        record_grade(conn, s_esther, a_hw1, 88)
 
-        record_grade(conn, s_maya, a_q1, 10)
-        record_grade(conn, s_maya, a_hw1, 92)
-        record_grade(conn, s_maya, a_mid, 180)
+        record_grade(conn, s_leah, a_q1, 10)
+        record_grade(conn, s_leah, a_hw1, 92)
+        record_grade(conn, s_leah, a_mid, 180)
 
         conn.commit()
-        """
 
-        # ---------------------------
-        # REPORTS (uncomment after implementing TODOs)
-        # ---------------------------
-        """
+
+
         print_rows("All students", list_students(conn))
 
-        # Grade report for each student
         for s in list_students(conn):
             rows = student_grade_report(conn, s["id"])
             print_rows(f"Grade report: {s['name']}", rows)
 
         print_rows("Leaderboard by average percent", leaderboard(conn))
-        """
+
 
         print("Homework starter created. Implement TODOs, then uncomment the demo/report blocks in main().")
     finally:
